@@ -1,0 +1,7 @@
+/.env
+/bin
+/botdata.db
+/Faye.csproj
+/Faye.sln
+/launch.json
+/obj

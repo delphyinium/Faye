@@ -15,7 +15,7 @@ namespace Faye
         {
             // 1) Load environment variables from .env
             Env.Load();
-
+            
             // 2) Retrieve the token
             string? token = Environment.GetEnvironmentVariable("DISCORD_TOKEN");
             if (string.IsNullOrEmpty(token))
@@ -23,10 +23,10 @@ namespace Faye
                 Console.WriteLine("Error: DISCORD_TOKEN not set!");
                 return;
             }
-
+            
             // 3) Build service provider
             var services = CreateServices();
-
+            
             // 4) Start the bot
             await RunBotAsync(services, token);
         }
@@ -38,8 +38,8 @@ namespace Faye
                 .AddSingleton(new DiscordSocketClient(new DiscordSocketConfig
                 {
                     GatewayIntents = GatewayIntents.AllUnprivileged
-                                     | GatewayIntents.GuildMembers
-                                     | GatewayIntents.MessageContent,
+                    | GatewayIntents.GuildMembers
+                    | GatewayIntents.MessageContent,
                     AlwaysDownloadUsers = true,
                     MessageCacheSize = 100
                 }))
@@ -49,6 +49,7 @@ namespace Faye
                 .AddSingleton<CommandHandler>()
                 .AddSingleton<DatabaseService>()
                 .AddSingleton<LevelingService>()
+                .AddSingleton<WelcomeService>()
                 .BuildServiceProvider();
         }
 
@@ -56,15 +57,15 @@ namespace Faye
         {
             var client = services.GetRequiredService<DiscordSocketClient>();
             var interactionService = services.GetRequiredService<InteractionService>();
-
+            
             // Logging
             client.Log += LogAsync;
             interactionService.Log += LogAsync;
-
+            
             // Login & connect
             await client.LoginAsync(TokenType.Bot, token);
             await client.StartAsync();
-
+            
             // Initialize your command handling & DB
             await services.GetRequiredService<CommandHandler>().InitializeAsync();
             await services.GetRequiredService<DatabaseService>().InitializeAsync();
@@ -74,7 +75,12 @@ namespace Faye
             Console.WriteLine("Initializing LevelingService...");
             var levelingService = services.GetRequiredService<LevelingService>();
             Console.WriteLine("LevelingService initialized");
-
+            
+            // Initialize WelcomeService
+            Console.WriteLine("Initializing WelcomeService...");
+            var welcomeService = services.GetRequiredService<WelcomeService>();
+            Console.WriteLine("WelcomeService initialized");
+            
             // Keep the application running
             await Task.Delay(-1);
         }

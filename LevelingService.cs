@@ -259,7 +259,7 @@ namespace Faye.Services
                 if (userData.Level > oldLevel)
                 {
                     Console.WriteLine($"User {user.Username} leveled up to level {userData.Level}!");
-                    await SendLevelUpMessageAsync(user, userData.Level);
+                    await SendLevelUpMessageAsync(user, userData.Level, message.Channel);
 
                     // Check for role assignments based on new level
                     if (userData.Level >= SELFIE_ACCESS_LEVEL)
@@ -304,15 +304,15 @@ namespace Faye.Services
             return (int)Math.Floor(Math.Sqrt(xp / 100.0));
         }
 
-        private async Task SendLevelUpMessageAsync(SocketGuildUser user, int newLevel)
+        private async Task SendLevelUpMessageAsync(SocketGuildUser user, int newLevel, ISocketMessageChannel sourceChannel)
         {
             try
             {
-                // Get the default channel, or another appropriate channel
-                var channel = user.Guild.DefaultChannel;
+                // Use the source channel where the user was active
+                var channel = sourceChannel ?? user.Guild.DefaultChannel;
                 if (channel == null)
                 {
-                    Console.WriteLine("Could not find default channel for level up message");
+                    Console.WriteLine("Could not find a valid channel for level up message");
                     return; // Safely handle null channel
                 }
                 
@@ -336,8 +336,27 @@ namespace Faye.Services
                     embed.AddField("New Access Unlocked!", "You now have access to the nudes channel!");
                 }
                 
-                await channel.SendMessageAsync(embed: embed.Build());
+                // Send the message and store the reference
+                var message = await channel.SendMessageAsync(embed: embed.Build());
                 Console.WriteLine("Level up message sent successfully");
+                
+                // Auto-delete after 30 seconds
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        await Task.Delay(TimeSpan.FromSeconds(30));
+                        if (message is IMessage deletableMessage)
+                        {
+                            await deletableMessage.DeleteAsync();
+                            Console.WriteLine("Level up message auto-deleted after timeout");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"Error auto-deleting level up message: {ex.Message}");
+                    }
+                });
             }
             catch (Exception ex)
             {
@@ -490,7 +509,8 @@ namespace Faye.Services
                 if (userData.Level > oldLevel)
                 {
                     Console.WriteLine($"User {user.Username} leveled up to level {userData.Level}!");
-                    await SendLevelUpMessageAsync(user, userData.Level);
+                    // For manual awards, we don't have a source channel, so use default
+                    await SendLevelUpMessageAsync(user, userData.Level, user.Guild.DefaultChannel);
                     
                     // Check for role assignments
                     if (userData.Level >= SELFIE_ACCESS_LEVEL)

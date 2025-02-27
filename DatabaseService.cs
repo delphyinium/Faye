@@ -11,13 +11,29 @@ namespace Faye.Services
     public class DatabaseService
     {
         private readonly string _connectionString;
+        private readonly string _dbPath;
 
         public DatabaseService()
         {
-            // Setup database connection
-            string dbPath = "botdata.db";
-            bool firstRun = !File.Exists(dbPath);
-            _connectionString = $"Data Source={dbPath};Version=3;";
+            // Create a persistent data directory in a location that won't change between builds
+            // Use ProgramData on Windows for a system-wide location that persists between rebuilds
+            string appDataPath = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), 
+                "Faye");
+                
+            // Create directory if it doesn't exist
+            if (!Directory.Exists(appDataPath))
+            {
+                Directory.CreateDirectory(appDataPath);
+                Console.WriteLine($"Created data directory at: {appDataPath}");
+            }
+            
+            // Set database path in the persistent location
+            _dbPath = Path.Combine(appDataPath, "botdata.db");
+            Console.WriteLine($"Using database at: {_dbPath}");
+            
+            bool firstRun = !File.Exists(_dbPath);
+            _connectionString = $"Data Source={_dbPath};Version=3;";
 
             if (firstRun)
             {

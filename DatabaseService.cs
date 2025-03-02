@@ -93,6 +93,13 @@ namespace Faye.Services
                     AddedAt TEXT NOT NULL
                 );";
 
+            string lofiTable = @"
+                CREATE TABLE ActiveLofiChannels (
+                    GuildId TEXT PRIMARY KEY,
+                    ChannelId TEXT,
+                    StartTime TEXT
+                );";
+
             using (var command = new SQLiteCommand(usersTable, connection))
                 command.ExecuteNonQuery();
 
@@ -103,6 +110,9 @@ namespace Faye.Services
                 command.ExecuteNonQuery();
 
             using (var command = new SQLiteCommand(dareTable, connection))
+                command.ExecuteNonQuery();
+                
+            using (var command = new SQLiteCommand(lofiTable, connection))
                 command.ExecuteNonQuery();
         }
 
@@ -146,6 +156,12 @@ namespace Faye.Services
                     Prompt TEXT NOT NULL,
                     AddedBy TEXT NOT NULL,
                     AddedAt TEXT NOT NULL
+                );
+                
+                CREATE TABLE IF NOT EXISTS ActiveLofiChannels (
+                    GuildId TEXT PRIMARY KEY,
+                    ChannelId TEXT,
+                    StartTime TEXT
                 );";
 
             cmd.CommandText = createTables;
@@ -531,6 +547,81 @@ namespace Faye.Services
                 });
             }
             return prompts;
+        }
+
+        // ----------------------------
+        //      Lofi Channel Methods
+        // ----------------------------
+
+        public async Task AddActiveLofiChannel(ulong guildId, ulong channelId)
+        {
+            using (var connection = new SQLiteConnection(_connectionString))
+            {
+                await connection.OpenAsync();
+                
+                string upsertSql = @"
+                    INSERT OR REPLACE INTO ActiveLofiChannels (GuildId, ChannelId, StartTime)
+                    VALUES (@GuildId, @ChannelId, @StartTime)";
+                
+                using (var cmd = new SQLiteCommand(upsertSql, connection))
+                {
+                    cmd.Parameters.AddWithValue("@GuildId", guildId.ToString());
+                    cmd.Parameters.AddWithValue("@ChannelId", channelId.ToString());
+                    cmd.Parameters.AddWithValue("@StartTime", DateTime.UtcNow.ToString("o"));
+                    await cmd.ExecuteNonQueryAsync();
+                }
+            }
+        }
+
+        public async Task RemoveActiveLofiChannel(ulong guildId, ulong? channelId = null)
+        {
+            using (var connection = new SQLiteConnection(_connectionString))
+            {
+                await connection.OpenAsync();
+                
+                string deleteSql = "DELETE FROM ActiveLofiChannels WHERE GuildId = @GuildId";
+                if (channelId.HasValue)
+                {
+                    deleteSql += " AND ChannelId = @ChannelId";
+                }
+                
+                using (var cmd = new SQLiteCommand(deleteSql, connection))
+                {
+                    cmd.Parameters.AddWithValue("@GuildId", guildId.ToString());
+                    if (channelId.HasValue)
+                    {
+                        cmd.Parameters.AddWithValue("@ChannelId", channelId.Value.ToString());
+                    }
+                    await cmd.ExecuteNonQueryAsync();
+                }
+            }
+        }
+
+        public async Task<List<(ulong GuildId, ulong ChannelId)>> GetActiveLofiChannels()
+        {
+            var result = new List<(ulong GuildId, ulong ChannelId)>();
+            
+            using (var connection = new SQLiteConnection(_connectionString))
+            {
+                await connection.OpenAsync();
+                
+                string selectSql = "SELECT GuildId, ChannelId FROM ActiveLofiChannels";
+                
+                using (var cmd = new SQLiteCommand(selectSql, connection))
+                using (var reader = await cmd.ExecuteReaderAsync())
+                {
+                    while (await reader.ReadAsync())
+                    {
+                        if (ulong.TryParse(reader["GuildId"].ToString(), out ulong guildId) &&
+                            ulong.TryParse(reader["ChannelId"].ToString(), out ulong channelId))
+                        {
+                            result.Add((guildId, channelId));
+                        }
+                    }
+                }
+            }
+            
+            return result;
         }
     }
 }

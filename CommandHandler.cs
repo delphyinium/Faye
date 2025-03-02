@@ -32,7 +32,7 @@ namespace Faye.Services
 
             // Add modules with slash commands, etc.
             await _interactionService.AddModulesAsync(Assembly.GetExecutingAssembly(), _services);
-            
+
             // Log all commands that were loaded
             foreach (var command in _interactionService.SlashCommands)
             {
@@ -40,20 +40,36 @@ namespace Faye.Services
             }
         }
 
-        private async Task OnReady()
+        private Task OnReady()
         {
-            try
+            // Start a background task that won't block the gateway
+            _ = Task.Run(async () =>
             {
-                // Register globally only
-                await _interactionService.RegisterCommandsGloballyAsync(true);
-                Console.WriteLine("Slash commands registered globally. Note: This may take up to an hour to update on Discord.");
-                Console.WriteLine("Bot is ready!");
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error registering commands: {ex.Message}");
-                Console.WriteLine(ex.StackTrace);
-            }
+                try
+                {
+                    // Delete existing global commands
+                    Console.WriteLine("Deleting existing global commands...");
+                    var existingCommands = await _client.GetGlobalApplicationCommandsAsync();
+                    foreach (var command in existingCommands)
+                    {
+                        await command.DeleteAsync();
+                        Console.WriteLine($"Deleted command: {command.Name}");
+                    }
+                    Console.WriteLine("Existing global commands deleted successfully.");
+
+                    // Then register globally
+                    await _interactionService.RegisterCommandsGloballyAsync(true);
+                    Console.WriteLine("Slash commands registered globally. Note: This may take up to an hour to update on Discord.");
+                    Console.WriteLine("Bot is ready!");
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error registering commands: {ex.Message}");
+                    Console.WriteLine(ex.StackTrace);
+                }
+            });
+
+            return Task.CompletedTask;
         }
 
         private async Task OnInteractionCreated(SocketInteraction interaction)
@@ -66,7 +82,7 @@ namespace Faye.Services
                 if (!result.IsSuccess)
                 {
                     Console.WriteLine($"Interaction error: {result.Error} - {result.ErrorReason}");
-                    
+
                     // Only send error messages for errors that should be reported to users
                     if (result.Error != InteractionCommandError.UnknownCommand)
                     {
